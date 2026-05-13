@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: mygardenos
+      POSTGRES_USER: mygardenos
+      POSTGRES_PASSWORD: mygardenos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mygardenos -d mygardenos"]
+      interval: 5s
+      timeout: 5s
+      retries: 8
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://mygardenos:mygardenos@db:5432/mygardenos
+      CORS_ORIGINS: "*"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  postgres_data:

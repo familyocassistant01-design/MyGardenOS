@@ -1,0 +1,32 @@
+const API = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${API}${path}`, { headers: { 'Content-Type': 'application/json' }, ...options });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  return res.json();
+}
+
+export type User = { id:number; email:string; username:string; gender:string; address:string; avatar_url?:string; is_active:boolean };
+export type Family = { id:number; code:string; name:string; address:string; members:{id:number; role:string; user:User}[] };
+export type Device = { id:number; serial:string; name:string; model:string; status:string; battery_percent:number };
+export type Settings = { language:string; region:string; device_notifications:boolean; system_notifications:boolean };
+export type Article = { slug:string; title:string; category:string; content:string };
+export type About = { product:string; version:string; update_status:string; privacy_policy:string; user_agreement:string };
+
+export const api = {
+  profile: () => request<User>('/profile'),
+  updateProfile: (body: Partial<User> & { password?: string }) => request<User>('/profile', { method:'PATCH', body: JSON.stringify(body) }),
+  families: () => request<Family[]>('/families'),
+  createFamily: () => request<Family>('/families', { method:'POST', body: JSON.stringify({ name:'happy family' }) }),
+  updateFamily: (id:number, body: Partial<Family>) => request<Family>(`/families/${id}`, { method:'PATCH', body: JSON.stringify(body) }),
+  dissolveFamily: (id:number) => request<{status:string}>(`/families/${id}`, { method:'DELETE' }),
+  devices: () => request<Device[]>('/devices'),
+  searchDevices: () => request<Device[]>('/devices/search'),
+  bindDevice: (serial:string, family_id?:number) => request<Device>('/devices/bind', { method:'POST', body: JSON.stringify({ serial, family_id }) }),
+  notifications: (kind:'device'|'system', read?: boolean) => request<unknown[]>(`/notifications?kind=${kind}${read === undefined ? '' : `&read=${read}`}`),
+  settings: () => request<Settings>('/settings'),
+  updateSettings: (body: Partial<Settings>) => request<Settings>('/settings', { method:'PATCH', body: JSON.stringify(body) }),
+  articles: () => request<Article[]>('/help/articles'),
+  article: (slug:string) => request<Article>(`/help/articles/${slug}`),
+  about: () => request<About>('/about'),
+};
