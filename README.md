@@ -60,6 +60,16 @@ EXPO_PUBLIC_API_URL=http://localhost:8000 npm run start
 - General settings: language action sheet, region auto, clear cache
 - Backend APIs for dev auth/user, profile, families/members, devices, notifications, settings, help/about metadata
 
+## iOS downloadable test builds
+
+This repo is configured for Expo EAS iOS builds and GitHub Release publishing.
+
+- Real iPhone test build: run the GitHub Actions workflow **Build iOS app** with profile `preview` after adding the `EXPO_TOKEN` repository secret and Apple signing credentials in EAS.
+- Simulator build: run the same workflow with profile `simulator`; this does not install on a physical iPhone.
+- Details: see `docs/ios-distribution.md`.
+
+Important: iOS cannot install an unsigned app directly from GitHub. A physical iPhone build must be signed through Apple Developer/TestFlight/EAS internal distribution.
+
 ## Tests/checks
 
 Backend:
