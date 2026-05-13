@@ -1,0 +1,10 @@
+{
+  "buildCommand": "pip install -r backend/requirements.txt",
+  "outputDirectory": "backend",
+  "framework": "python",
+  "functions": {
+    "backend/api/index.py": {
+      "maxDuration": 30
+    }
+  }
+}
