@@ -1,7 +1,14 @@
 const API = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, { headers: { 'Content-Type': 'application/json' }, ...options });
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  const res = await fetch(`${API}${path}`, { headers, ...options });
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   return res.json();
 }

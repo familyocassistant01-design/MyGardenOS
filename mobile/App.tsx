@@ -2,15 +2,47 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { ActionSheet, Button, Card, EmptyArt, InputDialog, Row, Screen } from './src/components/ui';
-import { About, api, Article, Device, Family, Settings, User } from './src/services/api';
+import { About, api, Article, Device, Family, Settings, User, setAuthToken } from './src/services/api';
 import { colors } from './src/theme/colors';
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { LoginScreen } from './src/screens/LoginScreen';
 
 type Route = 'home'|'addDevice'|'profile'|'account'|'families'|'familyDetail'|'notifications'|'notificationSettings'|'help'|'operationHelp'|'article'|'about'|'general'|'text';
 
 export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+}
+
+function AppContent() {
+  const { user, token, isLoading, logout } = useAuth();
+
+  useEffect(() => {
+    setAuthToken(token);
+  }, [token]);
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}>
+        <Text style={{ fontSize: 18, color: colors.muted }}>Loading...</Text>
+      </View>
+    );
+  }
+
+  if (!user || !token) {
+    return <LoginScreen />;
+  }
+
+  return <MainApp onLogout={logout} />;
+}
+
+function MainApp({ onLogout }: { onLogout: () => Promise<void> }) {
   const [route, setRoute] = useState<Route>('home');
   const [tab, setTab] = useState<'device'|'profile'>('device');
-  const [profile, setProfile] = useState<User>({id:1,email:'demo@example.com',username:'Hector',gender:'Male',address:'',is_active:true});
+  const [profile, setProfile] = useState<User | null>(null);
   const [families, setFamilies] = useState<Family[]>([]);
   const [family, setFamily] = useState<Family|undefined>();
   const [devices, setDevices] = useState<Device[]>([]);
@@ -18,13 +50,13 @@ export default function App() {
   const [about, setAbout] = useState<About|undefined>();
   const [settings, setSettings] = useState<Settings>({language:'English',region:'Auto',device_notifications:true,system_notifications:true});
   const [textPage, setTextPage] = useState({title:'', body:''});
-  const reload = async () => { try { setProfile(await api.profile()); setFamilies(await api.families()); setDevices(await api.devices()); setSettings(await api.settings()); } catch {} };
+  const reload = async () => { try { const p = await api.profile(); setProfile(p); setFamilies(await api.families()); setDevices(await api.devices()); setSettings(await api.settings()); } catch {} };
   useEffect(()=>{ reload(); },[]);
   const open = (r:Route) => setRoute(r);
   const close = () => { setRoute('home'); setTab('device'); reload(); };
 
   if (route === 'addDevice') return <AddDevice onBack={close} onBound={async()=>{await reload(); close();}} />;
-  if (route === 'account') return <Account profile={profile} setProfile={setProfile} onBack={()=>open('profile')} />;
+  if (route === 'account') return <Account profile={profile} setProfile={setProfile} onBack={()=>open('profile')} onLogout={onLogout} />;
   if (route === 'families') return <Families families={families} setFamilies={setFamilies} openFamily={(f)=>{setFamily(f); open('familyDetail')}} onBack={()=>open('profile')} />;
   if (route === 'familyDetail' && family) return <FamilyDetail family={family} onBack={()=>open('families')} onChange={async(f)=>{setFamily(f); setFamilies(await api.families())}} onDissolve={async()=>{await api.dissolveFamily(family.id); setFamilies(await api.families()); open('families')}} />;
   if (route === 'notifications') return <Notifications onBack={close} settings={()=>open('notificationSettings')} />;
@@ -43,7 +75,7 @@ function Home({devices, open, onTab}:{devices:Device[]; open:(r:Route)=>void; on
 function Bottom({active,onProfile}:{active:'device'|'profile';onProfile:()=>void}) { return <View style={s.bottom}><View style={s.tab}><Text style={s.tabIcon}>⌂</Text><Text style={[s.tabText,active==='device'&&{color:colors.green}]}>Home</Text></View><Pressable style={s.tab} onPress={onProfile}><Text style={s.tabIcon}>◉</Text><Text style={s.tabText}>Profile</Text></Pressable></View> }
 function Profile({open,onTab}:{open:(r:Route)=>void;onTab:(t:'profile')=>void}) { return <View style={s.root}><Screen title="Profile"><Card><Row label="Account" onPress={()=>open('account')}/><Row label="Families" onPress={()=>open('families')}/><Row label="Notification" onPress={()=>open('notifications')}/><Row label="Help" onPress={()=>open('help')}/><Row label="General Settings" onPress={()=>open('general')}/><Row label="About" onPress={()=>open('about')}/></Card></Screen><Bottom active="profile" onProfile={()=>onTab('profile')}/></View> }
 function AddDevice({onBack,onBound}:{onBack:()=>void;onBound:()=>void}) { const [found,setFound]=useState<Device[]>([]); const search=async()=>setFound(await api.searchDevices()); const bind=async(d:Device)=>{await api.bindDevice(d.serial); Alert.alert('Device bound', d.name); onBound();}; return <Screen title="Add Device" onBack={onBack} onClose={onBack}><View style={s.radar}><View style={s.radarSweep}/><Text style={s.radarCross}>＋</Text></View><Text style={s.emptyTitle}>Search in Devices</Text><Text style={s.muted}>Please activate the Bluetooth functionalities, then position yourself in close proximity to the target device you intend to locate. Proceed to wait patiently in this position.</Text><Button title="Select Device" onPress={search}/>{found.map(d=><Card key={d.serial}><Row label={d.name} value={d.model} onPress={()=>bind(d)}/></Card>)}</Screen> }
-function Account({profile,setProfile,onBack}:{profile:User;setProfile:(u:User)=>void;onBack:()=>void}) { const [field,setField]=useState<keyof User|'password'|null>(null); const [value,setValue]=useState(''); const edit=(f:keyof User|'password',v='')=>{setField(f);setValue(v)}; const save=async()=>{ if(!field)return; const u=await api.updateProfile({[field]:value}); setProfile(u); setField(null);}; return <Screen title="Account" onBack={onBack} onClose={onBack}><Card><Row label="Profile Photo" value="👤" onPress={()=>Alert.alert('Profile photo','Photo picker placeholder')}/></Card><Card><Row label="Account" value={profile.email}/><Row label="User Name" value={profile.username} onPress={()=>edit('username',profile.username)}/><Row label="Gender" value={profile.gender} onPress={()=>edit('gender',profile.gender)}/><Row label="Address" value={profile.address} onPress={()=>edit('address',profile.address)}/></Card><Card><Row label="Set Password" onPress={()=>edit('password','')}/><Row label="Deactivate Account" onPress={()=>Alert.alert('Deactivate Account','Development placeholder')}/></Card><View style={{height:120}}/><Button title="Log Out" variant="red" onPress={()=>Alert.alert('Logged out','Demo session reset')}/><InputDialog visible={!!field} title={`Modify ${field}`} placeholder={`Please enter your ${field}`} value={value} setValue={setValue} onCancel={()=>setField(null)} onConfirm={save}/></Screen> }
+function Account({profile,setProfile,onBack,onLogout}:{profile:User|null;setProfile:(u:User)=>void;onBack:()=>void;onLogout:()=>Promise<void>}) { const [field,setField]=useState<keyof User|'password'|null>(null); const [value,setValue]=useState(''); const edit=(f:keyof User|'password',v='')=>{setField(f);setValue(v)}; const save=async()=>{ if(!field)return; const u=await api.updateProfile({[field]:value}); setProfile(u); setField(null);}; return <Screen title="Account" onBack={onBack} onClose={onBack}><Card><Row label="Profile Photo" value="👤" onPress={()=>Alert.alert('Profile photo','Photo picker placeholder')}/></Card><Card><Row label="Account" value={profile?.email}/><Row label="User Name" value={profile?.username} onPress={()=>edit('username',profile?.username||'')}/><Row label="Gender" value={profile?.gender} onPress={()=>edit('gender',profile?.gender||'')}/><Row label="Address" value={profile?.address} onPress={()=>edit('address',profile?.address||'')}/></Card><Card><Row label="Set Password" onPress={()=>edit('password','')}/><Row label="Deactivate Account" onPress={()=>Alert.alert('Deactivate Account','Development placeholder')}/></Card><View style={{height:120}}/><Button title="Log Out" variant="red" onPress={async()=>{await onLogout(); Alert.alert('Logged out','See you next time!');}}/><InputDialog visible={!!field} title={`Modify ${field}`} placeholder={`Please enter your ${field}`} value={value} setValue={setValue} onCancel={()=>setField(null)} onConfirm={save}/></Screen> }
 function Families({families,setFamilies,openFamily,onBack}:{families:Family[];setFamilies:(f:Family[])=>void;openFamily:(f:Family)=>void;onBack:()=>void}) { const [sheet,setSheet]=useState(false); const create=async()=>{await api.createFamily(); setFamilies(await api.families()); setSheet(false)}; return <Screen title="Families" onBack={onBack} right={<Pressable onPress={()=>setSheet(true)}><Text style={s.plusTop}>+</Text></Pressable>}><>{families.map(f=><Card key={f.id}><View style={s.familyHead}><Text style={s.familyTitle}>{f.name}({f.members.length})</Text><Pressable onPress={()=>openFamily(f)}><Text style={{fontSize:30}}>⚙</Text></Pressable></View>{f.members.map(m=><View style={s.member} key={m.id}><Text style={{fontSize:44}}>👤</Text><View><Text style={s.memberName}>{m.user.username}</Text><Text style={s.mutedSmall}>{m.user.email}</Text><Text style={s.role}>{m.role}</Text></View></View>)}</Card>)}</><ActionSheet visible={sheet} title="Creating/Bind familie" actions={[{label:'Creating familie',onPress:create},{label:'Binding familie',onPress:()=>Alert.alert('Binding familie','Mock binding flow placeholder')}]} onCancel={()=>setSheet(false)}/></Screen> }
 function FamilyDetail({family,onBack,onChange,onDissolve}:{family:Family;onBack:()=>void;onChange:(f:Family)=>void;onDissolve:()=>void}) { const [addr,setAddr]=useState(false); const [val,setVal]=useState(family.address); const save=async()=>{const f=await api.updateFamily(family.id,{address:val}); onChange(f); setAddr(false)}; return <Screen title="Families" onBack={onBack} onClose={onBack}><Card><Row label="Familie Code" value={family.code}/><Row label="Familie Name" value={family.name} onPress={()=>{}}/><Row label="Address" value={family.address} onPress={()=>setAddr(true)}/></Card><View style={{height:360}}/><Button title="Dissolve Family" variant="red" onPress={onDissolve}/><InputDialog visible={addr} title="Modify address" placeholder="Please enter your address" value={val} setValue={setVal} onCancel={()=>setAddr(false)} onConfirm={save}/></Screen> }
 function Notifications({onBack,settings}:{onBack:()=>void;settings:()=>void}) { const [kind,setKind]=useState<'device'|'system'>('device'); const [read,setRead]=useState(false); return <Screen title="Notification" onBack={onBack} right={<Pressable onPress={settings}><Text style={{fontSize:32}}>⚙</Text></Pressable>}><View style={s.segment}><Pressable onPress={()=>setKind('device')}><Text style={[s.seg,kind==='device'&&s.activeSeg]}>Device notification</Text></Pressable><Pressable onPress={()=>setKind('system')}><Text style={[s.seg,kind==='system'&&s.activeSeg]}>System notification</Text></Pressable></View><View style={s.filters}><Pressable onPress={()=>setRead(false)} style={s.filter}><Text style={{color:colors.red}}>▣ Unread</Text></Pressable><Pressable onPress={()=>setRead(true)} style={s.filter}><Text style={{color:colors.green}}>▣ Read</Text></Pressable></View><EmptyArt/><Text style={s.noNews}>No news at this time.</Text></Screen> }
