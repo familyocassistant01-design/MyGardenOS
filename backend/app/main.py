@@ -143,7 +143,7 @@ def _send_email_code(email: str, code: str) -> bool:
     client = Resend(api_key=api_key)
     try:
         response = client.emails.send({
-            "from": "MyGardenOS <noreply@gardenos.example.com>",
+            "from": "MyGardenOS <info@mygardenos.com>",
             "to": email,
             "subject": "MyGardenOS verification code",
             "html": f"<p>Your MyGardenOS verification code is <strong>{code}</strong>.</p><p>It expires in {AUTH_CODE_TTL_MINUTES} minutes.</p>",
