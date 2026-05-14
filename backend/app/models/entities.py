@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
@@ -14,10 +15,10 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(120), default="Hector")
     gender: Mapped[str] = mapped_column(String(40), default="Male")
     address: Mapped[str] = mapped_column(String(500), default="")
-    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    avatar_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -27,8 +28,8 @@ class Family(Base):
     code: Mapped[str] = mapped_column(String(40), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(160), default="happy family")
     address: Mapped[str] = mapped_column(String(500), default="")
-    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     creator_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     members = relationship("FamilyMember", back_populates="family", cascade="all, delete-orphan")
 
@@ -48,11 +49,11 @@ class Device(Base):
     serial: Mapped[str] = mapped_column(String(120), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(160))
     model: Mapped[str] = mapped_column(String(120), default="AN-1600")
-    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
-    family_id: Mapped[int | None] = mapped_column(ForeignKey("families.id"), nullable=True)
+    owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    family_id: Mapped[Optional[int]] = mapped_column(ForeignKey("families.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(40), default="mock_available")
     battery_percent: Mapped[int] = mapped_column(Integer, default=54)
-    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 class Notification(Base):
     __tablename__ = "notifications"
@@ -88,7 +89,7 @@ class EmailVerificationCode(Base):
     email: Mapped[str] = mapped_column(String(255), index=True)
     code_hash: Mapped[str] = mapped_column(String(128))
     expires_at: Mapped[datetime] = mapped_column(DateTime)
-    consumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    consumed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

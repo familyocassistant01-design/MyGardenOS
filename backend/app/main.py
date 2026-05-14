@@ -3,6 +3,7 @@ import os
 import secrets
 from datetime import datetime, timedelta
 from hashlib import pbkdf2_hmac, sha256
+from typing import Optional
 
 try:
     from resend import Resend
@@ -93,7 +94,7 @@ def _hash_password(password: str) -> str:
     return f"pbkdf2${iterations}${salt}${digest}"
 
 
-def _verify_password(password: str, password_hash: str | None) -> bool:
+def _verify_password(password: str, password_hash: Optional[str]) -> bool:
     if not password_hash:
         return False
     if password_hash.startswith("pbkdf2$"):
@@ -174,7 +175,7 @@ def _auth_out(db: Session, user: User) -> AuthSessionOut:
     return AuthSessionOut(access_token=token, user=user)
 
 
-def _get_user_from_bearer(authorization: str | None, db: Session) -> User:
+def _get_user_from_bearer(authorization: Optional[str], db: Session) -> User:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(401, "Missing bearer token")
     token = authorization.split(" ", 1)[1].strip()
@@ -329,7 +330,7 @@ def verify_password(payload: VerifyPasswordIn, db: Session = Depends(get_db)):
 
 @app.get("/auth/me", response_model=AuthMeOut)
 def auth_me(
-    authorization: str | None = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
 ):
     user = _get_user_from_bearer(authorization, db)
@@ -402,7 +403,7 @@ def bind_device(payload: BindDeviceIn, db: Session = Depends(get_db)):
     return device
 
 @app.get("/notifications", response_model=list[NotificationOut])
-def notifications(kind: str = Query("device"), read: bool | None = Query(None), db: Session = Depends(get_db)):
+def notifications(kind: str = Query("device"), read: Optional[bool] = Query(None), db: Session = Depends(get_db)):
     user = current_user(db)
     q = db.query(Notification).filter(Notification.user_id == user.id, Notification.kind == kind)
     if read is not None: q = q.filter(Notification.is_read == read)

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import List, Optional
 from pydantic import BaseModel, EmailStr
 
 class UserOut(BaseModel):
@@ -7,15 +8,15 @@ class UserOut(BaseModel):
     username: str
     gender: str
     address: str
-    avatar_url: str | None = None
+    avatar_url: Optional[str] = None
     is_active: bool
     model_config = {"from_attributes": True}
 
 class ProfileUpdate(BaseModel):
-    username: str | None = None
-    gender: str | None = None
-    address: str | None = None
-    password: str | None = None
+    username: Optional[str] = None
+    gender: Optional[str] = None
+    address: Optional[str] = None
+    password: Optional[str] = None
 
 class FamilyMemberOut(BaseModel):
     id: int
@@ -28,7 +29,7 @@ class FamilyOut(BaseModel):
     code: str
     name: str
     address: str
-    members: list[FamilyMemberOut] = []
+    members: List[FamilyMemberOut] = []
     model_config = {"from_attributes": True}
 
 class FamilyCreate(BaseModel):
@@ -36,8 +37,8 @@ class FamilyCreate(BaseModel):
     address: str = ""
 
 class FamilyUpdate(BaseModel):
-    name: str | None = None
-    address: str | None = None
+    name: Optional[str] = None
+    address: Optional[str] = None
 
 class DeviceOut(BaseModel):
     id: int
@@ -46,13 +47,13 @@ class DeviceOut(BaseModel):
     model: str
     status: str
     battery_percent: int
-    owner_id: int | None = None
-    family_id: int | None = None
+    owner_id: Optional[int] = None
+    family_id: Optional[int] = None
     model_config = {"from_attributes": True}
 
 class BindDeviceIn(BaseModel):
     serial: str
-    family_id: int | None = None
+    family_id: Optional[int] = None
 
 class NotificationOut(BaseModel):
     id: int
@@ -71,10 +72,10 @@ class SettingsOut(BaseModel):
     model_config = {"from_attributes": True}
 
 class SettingsUpdate(BaseModel):
-    language: str | None = None
-    region: str | None = None
-    device_notifications: bool | None = None
-    system_notifications: bool | None = None
+    language: Optional[str] = None
+    region: Optional[str] = None
+    device_notifications: Optional[bool] = None
+    system_notifications: Optional[bool] = None
 
 class HelpArticleOut(BaseModel):
     slug: str
@@ -98,7 +99,7 @@ class RequestEmailCodeIn(BaseModel):
 class RequestEmailCodeOut(BaseModel):
     status: str
     expires_in_seconds: int
-    debug_code: str | None = None
+    debug_code: Optional[str] = None
 
 
 class VerifyEmailCodeIn(BaseModel):
