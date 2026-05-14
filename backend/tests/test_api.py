@@ -1,4 +1,5 @@
 import pytest
+import time
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -168,4 +169,62 @@ def test_about():
     assert "version" in data
     assert "privacy_policy" in data
     assert "user_agreement" in data
+
+
+# ── Real auth flow ────────────────────────────────────────────────────────────
+
+def test_email_code_password_auth_flow():
+    email = f"authflow-{int(time.time() * 1000)}@example.com"
+
+    # 1) Request code and verify email; first login requires setting password.
+    send_res = client.post("/auth/email/request-code", json={"email": email})
+    assert send_res.status_code == 200
+    send_data = send_res.json()
+    assert send_data["status"] == "sent"
+    assert send_data.get("debug_code")
+
+    verify_res = client.post(
+        "/auth/email/verify-code",
+        json={"email": email, "code": send_data["debug_code"]},
+    )
+    assert verify_res.status_code == 200
+    verify_data = verify_res.json()
+    assert verify_data["verified"] is True
+    assert verify_data["next_step"] == "set_password"
+
+    set_res = client.post(
+        "/auth/password/set",
+        json={"verify_token": verify_data["verify_token"], "password": "MyPass123"},
+    )
+    assert set_res.status_code == 200
+    set_data = set_res.json()
+    assert set_data["access_token"]
+    assert set_data["user"]["email"] == email
+
+    me_res = client.get("/auth/me", headers={"Authorization": f"Bearer {set_data['access_token']}"})
+    assert me_res.status_code == 200
+    assert me_res.json()["user"]["email"] == email
+
+    # 2) Next login via email+code should require password verification.
+    send2_res = client.post("/auth/email/request-code", json={"email": email})
+    assert send2_res.status_code == 200
+    code2 = send2_res.json()["debug_code"]
+
+    verify2_res = client.post("/auth/email/verify-code", json={"email": email, "code": code2})
+    assert verify2_res.status_code == 200
+    verify2_data = verify2_res.json()
+    assert verify2_data["next_step"] == "verify_password"
+
+    wrong_pw = client.post(
+        "/auth/password/verify",
+        json={"verify_token": verify2_data["verify_token"], "password": "WrongPass"},
+    )
+    assert wrong_pw.status_code == 401
+
+    verify_pw = client.post(
+        "/auth/password/verify",
+        json={"verify_token": verify2_data["verify_token"], "password": "MyPass123"},
+    )
+    assert verify_pw.status_code == 200
+    assert verify_pw.json()["user"]["email"] == email
 

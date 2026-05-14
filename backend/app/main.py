@@ -1,14 +1,51 @@
-from hashlib import sha256
+import hmac
+import os
+import secrets
+from datetime import datetime, timedelta
+from hashlib import pbkdf2_hmac, sha256
+
+try:
+    from resend import Resend
+except ImportError:
+    Resend = None
 from random import randint
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import Base, SessionLocal, engine, get_db
-from app.models.entities import Device, Family, FamilyMember, HelpArticle, Notification, Setting, User
+from app.models.entities import (
+    AuthSession,
+    Device,
+    EmailVerificationCode,
+    Family,
+    FamilyMember,
+    HelpArticle,
+    Notification,
+    Setting,
+    User,
+)
 from app.schemas.dto import (
-    AboutOut, BindDeviceIn, DeviceOut, FamilyCreate, FamilyOut, FamilyUpdate,
-    HelpArticleOut, NotificationOut, ProfileUpdate, SettingsOut, SettingsUpdate, UserOut,
+    AboutOut,
+    AuthMeOut,
+    AuthSessionOut,
+    BindDeviceIn,
+    DeviceOut,
+    FamilyCreate,
+    FamilyOut,
+    FamilyUpdate,
+    HelpArticleOut,
+    NotificationOut,
+    ProfileUpdate,
+    RequestEmailCodeIn,
+    RequestEmailCodeOut,
+    SetPasswordIn,
+    SettingsOut,
+    SettingsUpdate,
+    UserOut,
+    VerifyEmailCodeIn,
+    VerifyEmailCodeOut,
+    VerifyPasswordIn,
 )
 
 app = FastAPI(title="MyGardenOS API", version="0.1.0")
@@ -25,6 +62,146 @@ HELP_TITLES = [
     "Quick Start instructions", "Install blade disc", "Replace the battery",
     "Install the garage", "Clean the mower",
 ]
+
+AUTH_SECRET = os.getenv("AUTH_SECRET", "dev-auth-secret-change-me")
+AUTH_CODE_TTL_MINUTES = int(os.getenv("AUTH_CODE_TTL_MINUTES", "10"))
+AUTH_VERIFY_TOKEN_TTL_MINUTES = int(os.getenv("AUTH_VERIFY_TOKEN_TTL_MINUTES", "15"))
+AUTH_SESSION_TTL_DAYS = int(os.getenv("AUTH_SESSION_TTL_DAYS", "30"))
+AUTH_DEBUG_CODES = os.getenv(
+    "AUTH_DEBUG_CODES",
+    "0" if os.getenv("APP_ENV") == "production" else "1",
+) == "1"
+
+
+def _now() -> datetime:
+    return datetime.utcnow()
+
+
+def _normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
+def _hash_email_code(email: str, code: str) -> str:
+    raw = f"{email}:{code}:{AUTH_SECRET}"
+    return sha256(raw.encode()).hexdigest()
+
+
+def _hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    iterations = 200000
+    digest = pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), iterations).hex()
+    return f"pbkdf2${iterations}${salt}${digest}"
+
+
+def _verify_password(password: str, password_hash: str | None) -> bool:
+    if not password_hash:
+        return False
+    if password_hash.startswith("pbkdf2$"):
+        _, iter_str, salt, digest = password_hash.split("$", 3)
+        calc = pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), int(iter_str)).hex()
+        return hmac.compare_digest(calc, digest)
+    # Backward-compatible fallback for legacy SHA-256 hashes.
+    return hmac.compare_digest(sha256(password.encode()).hexdigest(), password_hash)
+
+
+def _sign_payload(payload: str) -> str:
+    return hmac.new(AUTH_SECRET.encode(), payload.encode(), "sha256").hexdigest()
+
+
+def _make_signed_token(token_type: str, email: str, ttl_minutes: int) -> str:
+    exp_ts = int((_now() + timedelta(minutes=ttl_minutes)).timestamp())
+    nonce = secrets.token_urlsafe(8)
+    payload = f"{token_type}|{email}|{exp_ts}|{nonce}"
+    signature = _sign_payload(payload)
+    return f"{payload}.{signature}"
+
+
+def _verify_signed_token(token: str, expected_type: str) -> str:
+    try:
+        payload, signature = token.rsplit(".", 1)
+        token_type, email, exp_ts, _nonce = payload.split("|", 3)
+    except ValueError as exc:
+        raise HTTPException(401, "Invalid token") from exc
+
+    if not hmac.compare_digest(_sign_payload(payload), signature):
+        raise HTTPException(401, "Invalid token signature")
+    if token_type != expected_type:
+        raise HTTPException(401, "Invalid token type")
+    if int(exp_ts) < int(_now().timestamp()):
+        raise HTTPException(401, "Token expired")
+    return _normalize_email(email)
+
+
+def _send_email_code(email: str, code: str) -> bool:
+    if not Resend:
+        return False
+    
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        return False
+    
+    client = Resend(api_key=api_key)
+    try:
+        response = client.emails.send({
+            "from": "MyGardenOS <noreply@gardenos.example.com>",
+            "to": email,
+            "subject": "MyGardenOS verification code",
+            "html": f"<p>Your MyGardenOS verification code is <strong>{code}</strong>.</p><p>It expires in {AUTH_CODE_TTL_MINUTES} minutes.</p>",
+        })
+        return bool(response.get("id"))
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Resend email failed: {e}")
+        return False
+
+
+def _create_auth_session(db: Session, user: User) -> str:
+    token = secrets.token_urlsafe(32)
+    token_hash = sha256(token.encode()).hexdigest()
+    session = AuthSession(
+        user_id=user.id,
+        token_hash=token_hash,
+        expires_at=_now() + timedelta(days=AUTH_SESSION_TTL_DAYS),
+    )
+    db.add(session)
+    db.commit()
+    return token
+
+
+def _auth_out(db: Session, user: User) -> AuthSessionOut:
+    token = _create_auth_session(db, user)
+    db.refresh(user)
+    return AuthSessionOut(access_token=token, user=user)
+
+
+def _get_user_from_bearer(authorization: str | None, db: Session) -> User:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(401, "Missing bearer token")
+    token = authorization.split(" ", 1)[1].strip()
+    token_hash = sha256(token.encode()).hexdigest()
+    session = (
+        db.query(AuthSession)
+        .filter(AuthSession.token_hash == token_hash, AuthSession.expires_at > _now())
+        .first()
+    )
+    if not session:
+        raise HTTPException(401, "Invalid or expired session")
+    user = db.get(User, session.user_id)
+    if not user:
+        raise HTTPException(401, "User not found")
+    return user
+
+
+def _get_or_create_user_by_email(email: str, db: Session) -> User:
+    user = db.query(User).filter(User.email == email).first()
+    if user:
+        return user
+    username = email.split("@", 1)[0][:120] or "user"
+    user = User(email=email, username=username, gender="Unknown")
+    db.add(user)
+    db.flush()
+    db.add(Setting(user_id=user.id))
+    return user
 
 def current_user(db: Session) -> User:
     user = db.query(User).filter(User.email == "demo@example.com").first()
@@ -67,6 +244,96 @@ def startup():
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "MyGardenOS API"}
+
+
+@app.post("/auth/email/request-code", response_model=RequestEmailCodeOut)
+def request_email_code(payload: RequestEmailCodeIn, db: Session = Depends(get_db)):
+    email = _normalize_email(payload.email)
+    code = f"{secrets.randbelow(1000000):06d}"
+    expires_at = _now() + timedelta(minutes=AUTH_CODE_TTL_MINUTES)
+    code_record = EmailVerificationCode(
+        email=email,
+        code_hash=_hash_email_code(email, code),
+        expires_at=expires_at,
+    )
+    db.add(code_record)
+    db.commit()
+
+    delivered = _send_email_code(email, code)
+    if not delivered and not AUTH_DEBUG_CODES:
+        raise HTTPException(500, "Email delivery is not configured")
+
+    return RequestEmailCodeOut(
+        status="sent",
+        expires_in_seconds=AUTH_CODE_TTL_MINUTES * 60,
+        debug_code=code if AUTH_DEBUG_CODES else None,
+    )
+
+
+@app.post("/auth/email/verify-code", response_model=VerifyEmailCodeOut)
+def verify_email_code(payload: VerifyEmailCodeIn, db: Session = Depends(get_db)):
+    email = _normalize_email(payload.email)
+    code_record = (
+        db.query(EmailVerificationCode)
+        .filter(
+            EmailVerificationCode.email == email,
+            EmailVerificationCode.consumed_at.is_(None),
+        )
+        .order_by(EmailVerificationCode.created_at.desc())
+        .first()
+    )
+    if not code_record:
+        raise HTTPException(400, "Verification code not found")
+    if code_record.expires_at < _now():
+        raise HTTPException(400, "Verification code expired")
+    if not hmac.compare_digest(code_record.code_hash, _hash_email_code(email, payload.code)):
+        raise HTTPException(400, "Verification code is invalid")
+
+    code_record.consumed_at = _now()
+    user = _get_or_create_user_by_email(email, db)
+    db.commit()
+    db.refresh(user)
+
+    next_step = "set_password" if not user.password_hash else "verify_password"
+    verify_token = _make_signed_token("email_verified", email, AUTH_VERIFY_TOKEN_TTL_MINUTES)
+    return VerifyEmailCodeOut(verified=True, next_step=next_step, verify_token=verify_token)
+
+
+@app.post("/auth/password/set", response_model=AuthSessionOut)
+def set_password(payload: SetPasswordIn, db: Session = Depends(get_db)):
+    if len(payload.password) < 6:
+        raise HTTPException(400, "Password must be at least 6 characters")
+    email = _verify_signed_token(payload.verify_token, "email_verified")
+    user = _get_or_create_user_by_email(email, db)
+    if user.password_hash:
+        raise HTTPException(409, "Password already set. Use /auth/password/verify")
+
+    user.password_hash = _hash_password(payload.password)
+    db.commit()
+    return _auth_out(db, user)
+
+
+@app.post("/auth/password/verify", response_model=AuthSessionOut)
+def verify_password(payload: VerifyPasswordIn, db: Session = Depends(get_db)):
+    email = _verify_signed_token(payload.verify_token, "email_verified")
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    if not user.password_hash:
+        raise HTTPException(409, "Password not set. Use /auth/password/set")
+    if not _verify_password(payload.password, user.password_hash):
+        raise HTTPException(401, "Incorrect password")
+
+    return _auth_out(db, user)
+
+
+@app.get("/auth/me", response_model=AuthMeOut)
+def auth_me(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    user = _get_user_from_bearer(authorization, db)
+    return AuthMeOut(user=user)
 
 @app.get("/auth/dev-user", response_model=UserOut)
 def dev_user(db: Session = Depends(get_db)):

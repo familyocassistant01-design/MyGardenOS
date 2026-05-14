@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 # Must be set before any app module is imported so database.py picks it up.
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+os.environ["AUTH_DEBUG_CODES"] = "1"
 
 from app.database import Base, get_db
 from app.main import app, seed

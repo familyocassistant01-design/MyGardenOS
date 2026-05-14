@@ -89,3 +89,44 @@ class AboutOut(BaseModel):
     update_status: str
     privacy_policy: str
     user_agreement: str
+
+
+class RequestEmailCodeIn(BaseModel):
+    email: EmailStr
+
+
+class RequestEmailCodeOut(BaseModel):
+    status: str
+    expires_in_seconds: int
+    debug_code: str | None = None
+
+
+class VerifyEmailCodeIn(BaseModel):
+    email: EmailStr
+    code: str
+
+
+class VerifyEmailCodeOut(BaseModel):
+    verified: bool
+    next_step: str
+    verify_token: str
+
+
+class SetPasswordIn(BaseModel):
+    verify_token: str
+    password: str
+
+
+class VerifyPasswordIn(BaseModel):
+    verify_token: str
+    password: str
+
+
+class AuthSessionOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class AuthMeOut(BaseModel):
+    user: UserOut
