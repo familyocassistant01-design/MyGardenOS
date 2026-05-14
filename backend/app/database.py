@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse, parse_qs, urlencode, urlunparse
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -9,6 +9,19 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 def _build_database_url() -> str:
     explicit_url = os.getenv("DATABASE_URL")
     if explicit_url:
+        # If the URL references a sslrootcert file that doesn't exist on this
+        # host (e.g. Vercel serverless), strip that param so psycopg doesn't fail.
+        if "sslrootcert=" in explicit_url:
+            parsed = urlparse(explicit_url)
+            params = parse_qs(parsed.query, keep_blank_values=True)
+            cert_path = params.get("sslrootcert", [None])[0]
+            if cert_path and not Path(cert_path).exists():
+                params.pop("sslrootcert", None)
+                # Downgrade sslmode to require when cert file is absent
+                if params.get("sslmode", [""])[0] == "verify-full":
+                    params["sslmode"] = ["require"]
+                new_query = urlencode({k: v[0] for k, v in params.items()})
+                explicit_url = urlunparse(parsed._replace(query=new_query))
         return explicit_url
 
     # Prefer RDS-style env vars when host is provided.

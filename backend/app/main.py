@@ -52,12 +52,17 @@ def seed(db: Session):
 
 @app.on_event("startup")
 def startup():
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
     try:
-        seed(db)
-    finally:
-        db.close()
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        try:
+            seed(db)
+        finally:
+            db.close()
+    except Exception as e:
+        # Log but do not crash — /health should still respond even if DB is unreachable
+        import logging
+        logging.getLogger(__name__).error("Startup DB init failed: %s", e)
 
 @app.get("/health")
 def health():
