@@ -7,9 +7,41 @@ export function Screen({ title, children, onBack, onClose, right }: {title?:stri
 }
 export function Card({ children }: {children:React.ReactNode}) { return <View style={s.card}>{children}</View>; }
 export function Row({ label, value, onPress, danger }: {label:string; value?:string; onPress?:()=>void; danger?:boolean}) { return <Pressable onPress={onPress} style={s.row}><Text style={[s.rowLabel, danger && {color:colors.darkRed}]}>{label}</Text><View style={s.rowValueWrap}>{value && <Text style={s.rowValue}>{value}</Text>}{onPress && <Text style={s.chev}>›</Text>}</View></Pressable>; }
-export function Button({ title, onPress, variant='green' }: {title:string; onPress:()=>void; variant?:'green'|'red'|'light'}) { const bg = variant==='red'?colors.red:variant==='light'?colors.card:colors.green; return <Pressable onPress={onPress} style={[s.button,{backgroundColor:bg}]}><Text style={[s.buttonText, variant==='light' && {color:'#1677D2'}]}>{title}</Text></Pressable>; }
+export function Button({ title, onPress, variant='green' }: {title:string; onPress:()=>void; variant?:'green'|'red'|'light'}) { const bg = variant==='red'?colors.red:variant==='light'?colors.card:colors.green; return <Pressable onPress={onPress} style={[s.button,{backgroundColor:bg}, variant==='light' && s.buttonLight]}><Text style={[s.buttonText, variant==='light' && {color:colors.green}]}>{title}</Text></Pressable>; }
 export function EmptyArt() { return <View style={s.emptyArt}><Text style={s.sparkle}>✦  ◦       ✳</Text><Text style={s.bubble}>?</Text><Text style={s.shadow}>▰</Text></View>; }
 export function InputDialog({ visible, title, placeholder, value, setValue, onCancel, onConfirm }: {visible:boolean; title:string; placeholder:string; value:string; setValue:(v:string)=>void; onCancel:()=>void; onConfirm:()=>void}) { return <Modal transparent visible={visible} animationType="fade"><View style={s.overlay}><View style={s.dialog}><Text style={s.dialogTitle}>{title}</Text><TextInput style={s.input} placeholder={placeholder} value={value} onChangeText={setValue}/><View style={s.dialogActions}><Button title="Cancel" variant="red" onPress={onCancel}/><Button title="Confirm" onPress={onConfirm}/></View></View></View></Modal>; }
 export function ActionSheet({ visible, title, actions, onCancel }: {visible:boolean; title?:string; actions:{label:string; onPress:()=>void}[]; onCancel:()=>void}) { return <Modal transparent visible={visible} animationType="slide"><View style={s.sheetOverlay}><View style={s.sheet}>{title && <Text style={s.sheetTitle}>{title}</Text>}{actions.map(a=><Pressable key={a.label} onPress={a.onPress} style={s.sheetItem}><Text style={s.sheetText}>{a.label}</Text></Pressable>)}</View><Pressable onPress={onCancel} style={s.cancelSheet}><Text style={s.sheetText}>Cancel</Text></Pressable></View></Modal>; }
 
-const s = StyleSheet.create({ screen:{flex:1,backgroundColor:colors.bg,paddingTop:46}, nav:{height:56,flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:24}, navIcon:{fontSize:42,color:'#111'}, close:{fontSize:36,color:'#111',marginLeft:14}, navRight:{minWidth:60,flexDirection:'row',justifyContent:'flex-end',alignItems:'center'}, title:{fontWeight:'700',fontSize:22,color:'#16181C'}, body:{padding:24,paddingBottom:40}, card:{backgroundColor:colors.card,borderRadius:12,borderWidth:1,borderColor:colors.line,marginBottom:26,overflow:'hidden',shadowColor:'#A8D8FF',shadowOpacity:.25,shadowRadius:12}, row:{minHeight:72,paddingHorizontal:20,flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderBottomWidth:1,borderBottomColor:colors.line}, rowLabel:{fontSize:18,color:'#555B63'}, rowValueWrap:{flexDirection:'row',alignItems:'center'}, rowValue:{fontSize:18,color:colors.muted,marginRight:12}, chev:{fontSize:44,color:'#202226'}, button:{borderRadius:12,minHeight:56,alignItems:'center',justifyContent:'center',paddingHorizontal:18,flex:1,marginHorizontal:6}, buttonText:{color:'#fff',fontWeight:'700',fontSize:18}, emptyArt:{alignItems:'center',marginVertical:42}, sparkle:{color:'#45D78E',fontSize:30}, bubble:{fontSize:76,color:'#A7F0BE',borderColor:'#A7F0BE',borderWidth:5,borderRadius:60,width:120,height:120,textAlign:'center'}, shadow:{color:'#A7F0BE',fontSize:72,marginTop:-44,opacity:.8}, overlay:{flex:1,backgroundColor:'rgba(0,0,0,.35)',justifyContent:'center',padding:24}, dialog:{backgroundColor:'#fff',borderRadius:12,padding:26,borderWidth:1,borderColor:'#76BFFF'}, dialogTitle:{textAlign:'center',fontSize:22,fontWeight:'700',marginBottom:38}, input:{borderBottomWidth:1,borderBottomColor:'#B8B8B8',fontSize:18,marginBottom:34,padding:8}, dialogActions:{flexDirection:'row'}, sheetOverlay:{flex:1,backgroundColor:'rgba(0,0,0,.35)',justifyContent:'flex-end',padding:10}, sheet:{backgroundColor:'#fff',borderRadius:12,overflow:'hidden'}, sheetTitle:{textAlign:'center',fontSize:16,color:'#888',padding:16,borderBottomWidth:1,borderBottomColor:'#ddd'}, sheetItem:{padding:22,alignItems:'center',borderBottomWidth:1,borderBottomColor:'#ddd'}, sheetText:{fontSize:24,color:'#1677D2'}, cancelSheet:{backgroundColor:'#fff',borderRadius:12,alignItems:'center',padding:22,marginTop:12,marginBottom:18} });
+const s = StyleSheet.create({
+  screen:{flex:1,backgroundColor:colors.bg,paddingTop:48},
+  nav:{height:64,flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:20,borderBottomWidth:1,borderBottomColor:colors.line,backgroundColor:'#F7FBF6'},
+  navIcon:{fontSize:36,color:colors.text},
+  close:{fontSize:34,color:colors.text,marginLeft:14},
+  navRight:{minWidth:60,flexDirection:'row',justifyContent:'flex-end',alignItems:'center'},
+  title:{fontWeight:'800',fontSize:22,color:colors.text,letterSpacing:.2},
+  body:{padding:20,paddingBottom:42},
+  card:{backgroundColor:colors.card,borderRadius:20,borderWidth:1,borderColor:colors.line,marginBottom:18,overflow:'hidden',shadowColor:'#0D3A26',shadowOpacity:.08,shadowRadius:12,shadowOffset:{width:0,height:6}},
+  row:{minHeight:68,paddingHorizontal:18,flexDirection:'row',alignItems:'center',justifyContent:'space-between',borderBottomWidth:1,borderBottomColor:colors.line},
+  rowLabel:{fontSize:17,color:'#3E5044',fontWeight:'500'},
+  rowValueWrap:{flexDirection:'row',alignItems:'center'},
+  rowValue:{fontSize:16,color:colors.muted,marginRight:10},
+  chev:{fontSize:36,color:'#314436'},
+  button:{borderRadius:16,minHeight:54,alignItems:'center',justifyContent:'center',paddingHorizontal:18,flex:1,marginHorizontal:6},
+  buttonLight:{borderWidth:1,borderColor:colors.line},
+  buttonText:{color:'#fff',fontWeight:'700',fontSize:17},
+  emptyArt:{alignItems:'center',marginVertical:34},
+  sparkle:{color:'#5DB47D',fontSize:24},
+  bubble:{fontSize:70,color:'#86C49E',borderColor:'#B9DCC5',borderWidth:4,borderRadius:56,width:112,height:112,textAlign:'center',backgroundColor:'#EDF7F0'},
+  shadow:{color:'#9FCCAF',fontSize:64,marginTop:-40,opacity:.7},
+  overlay:{flex:1,backgroundColor:'rgba(0,0,0,.28)',justifyContent:'center',padding:24},
+  dialog:{backgroundColor:'#fff',borderRadius:18,padding:22,borderWidth:1,borderColor:colors.line},
+  dialogTitle:{textAlign:'center',fontSize:20,fontWeight:'700',marginBottom:28,color:colors.text},
+  input:{borderBottomWidth:1,borderBottomColor:'#B6C4BA',fontSize:17,marginBottom:28,padding:8,color:colors.text},
+  dialogActions:{flexDirection:'row'},
+  sheetOverlay:{flex:1,backgroundColor:'rgba(0,0,0,.25)',justifyContent:'flex-end',padding:10},
+  sheet:{backgroundColor:'#fff',borderRadius:18,overflow:'hidden'},
+  sheetTitle:{textAlign:'center',fontSize:15,color:colors.muted,padding:14,borderBottomWidth:1,borderBottomColor:colors.line},
+  sheetItem:{padding:20,alignItems:'center',borderBottomWidth:1,borderBottomColor:colors.line},
+  sheetText:{fontSize:20,color:colors.green,fontWeight:'600'},
+  cancelSheet:{backgroundColor:'#fff',borderRadius:18,alignItems:'center',padding:18,marginTop:10,marginBottom:16},
+});

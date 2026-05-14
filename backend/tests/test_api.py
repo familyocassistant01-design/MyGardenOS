@@ -1,19 +1,171 @@
+import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 
 client = TestClient(app)
 
+# ── Health ────────────────────────────────────────────────────────────────────
+
 def test_health():
-    res = client.get('/health')
+    res = client.get("/health")
     assert res.status_code == 200
-    assert res.json()['status'] == 'ok'
+    data = res.json()
+    assert data["status"] == "ok"
+    assert data["service"] == "MyGardenOS API"
 
-def test_dev_user_and_about():
-    assert client.get('/auth/dev-user').json()['email'] == 'demo@example.com'
-    about = client.get('/about').json()
-    assert about['product'] == 'MyGardenOS'
+# ── Auth / Dev user ───────────────────────────────────────────────────────────
 
-def test_mock_device_search():
-    res = client.get('/devices/search')
+def test_dev_user():
+    res = client.get("/auth/dev-user")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["email"] == "demo@example.com"
+    assert "id" in data
+
+# ── Profile ───────────────────────────────────────────────────────────────────
+
+def test_get_profile():
+    res = client.get("/profile")
+    assert res.status_code == 200
+    assert res.json()["email"] == "demo@example.com"
+
+def test_update_profile():
+    res = client.patch("/profile", json={"username": "TestUser", "gender": "Female"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["username"] == "TestUser"
+    assert data["gender"] == "Female"
+    # restore
+    client.patch("/profile", json={"username": "Hector", "gender": "Male"})
+
+# ── Families ──────────────────────────────────────────────────────────────────
+
+def test_list_families():
+    res = client.get("/families")
     assert res.status_code == 200
     assert isinstance(res.json(), list)
+
+def test_create_and_dissolve_family():
+    res = client.post("/families", json={"name": "Test Family", "address": "123 Test St"})
+    assert res.status_code == 200
+    fam = res.json()
+    assert fam["name"] == "Test Family"
+    fam_id = fam["id"]
+
+    # dissolve
+    del_res = client.delete(f"/families/{fam_id}")
+    assert del_res.status_code == 200
+    assert del_res.json()["status"] == "dissolved"
+
+def test_update_family():
+    res = client.post("/families", json={"name": "Edit Family"})
+    assert res.status_code == 200
+    fam_id = res.json()["id"]
+
+    patch_res = client.patch(f"/families/{fam_id}", json={"address": "456 New Ave"})
+    assert patch_res.status_code == 200
+    assert patch_res.json()["address"] == "456 New Ave"
+
+    client.delete(f"/families/{fam_id}")
+
+def test_update_nonexistent_family():
+    res = client.patch("/families/999999", json={"name": "Ghost"})
+    assert res.status_code == 404
+
+def test_dissolve_nonexistent_family():
+    res = client.delete("/families/999999")
+    assert res.status_code == 404
+
+# ── Devices ───────────────────────────────────────────────────────────────────
+
+def test_search_devices():
+    res = client.get("/devices/search")
+    assert res.status_code == 200
+    assert isinstance(res.json(), list)
+
+def test_list_devices():
+    res = client.get("/devices")
+    assert res.status_code == 200
+    assert isinstance(res.json(), list)
+
+def test_bind_device():
+    available = client.get("/devices/search").json()
+    assert len(available) > 0, "No unbound devices available for binding test"
+    serial = available[0]["serial"]
+
+    res = client.post("/devices/bind", json={"serial": serial})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["serial"] == serial
+    assert data["status"] == "bound"
+
+def test_bind_nonexistent_device():
+    res = client.post("/devices/bind", json={"serial": "DOES-NOT-EXIST-0000"})
+    assert res.status_code == 404
+
+# ── Notifications ─────────────────────────────────────────────────────────────
+
+def test_notifications_device():
+    res = client.get("/notifications?kind=device")
+    assert res.status_code == 200
+    assert isinstance(res.json(), list)
+
+def test_notifications_system():
+    res = client.get("/notifications?kind=system")
+    assert res.status_code == 200
+    assert isinstance(res.json(), list)
+
+def test_notifications_read_filter():
+    res = client.get("/notifications?kind=device&read=false")
+    assert res.status_code == 200
+
+# ── Settings ──────────────────────────────────────────────────────────────────
+
+def test_get_settings():
+    res = client.get("/settings")
+    assert res.status_code == 200
+    data = res.json()
+    assert "language" in data
+    assert "device_notifications" in data
+
+def test_update_settings():
+    res = client.patch("/settings", json={"language": "Chinese", "device_notifications": False})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["language"] == "Chinese"
+    assert data["device_notifications"] is False
+    # restore
+    client.patch("/settings", json={"language": "English", "device_notifications": True})
+
+# ── Help articles ─────────────────────────────────────────────────────────────
+
+def test_list_help_articles():
+    res = client.get("/help/articles")
+    assert res.status_code == 200
+    articles = res.json()
+    assert isinstance(articles, list)
+    assert len(articles) > 0
+
+def test_get_help_article_by_slug():
+    articles = client.get("/help/articles").json()
+    slug = articles[0]["slug"]
+
+    res = client.get(f"/help/articles/{slug}")
+    assert res.status_code == 200
+    assert res.json()["slug"] == slug
+
+def test_get_nonexistent_article():
+    res = client.get("/help/articles/not-a-real-slug")
+    assert res.status_code == 404
+
+# ── About ─────────────────────────────────────────────────────────────────────
+
+def test_about():
+    res = client.get("/about")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["product"] == "MyGardenOS"
+    assert "version" in data
+    assert "privacy_policy" in data
+    assert "user_agreement" in data
+
